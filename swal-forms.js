@@ -27,47 +27,28 @@
   extend(SwalForm.prototype, {
     formClass: 'swal-form',
     generateHtmlForm: function() {
-      var formInnerHtml = this.formFields.map(toFormTag).reduce(toSingleString)
+      var form = {
+        clazz: this.formClass,
+        innerHtml: this.formFields.map(toFormTag.bind(this)).reduce(toSingleString)
+      }
 
-      return  '<div class="' + this.formClass + '">' + formInnerHtml + '</div>'
+      return t("<div class='{clazz}'>{innerHtml}</div>", form)
 
       function toFormTag(field) {
-        var id = field.id || ''
-        var placeholder = field.placeholder || camelCaseToHuman(id)
-        var value = field.value || ''
-        var label = (isRadioOrCheckbox(field) ? value : '')
-        var type = field.type || 'text'
-        var clazz = (field.type != 'checkbox' && field.type != 'radio' ? 'nice-input' : '')
-        var conditionalLineBreak = ''
-
-        if (isRadioOrCheckbox(field) && nameChangedFromLastField.call(this, field)) {
-          conditionalLineBreak = '<br>'
-        }
+        var input = Input(field)
+        // to separate groups of checkboxes and radiobuttons in different lines
+        var conditionalLineBreak = (input.isRadioOrCheckbox() && this.lastFieldName != field.name) ? '<br>' : ''
         this.lastFieldName = field.name
 
-        return conditionalLineBreak + label + '<input class="' + clazz + '" type="' + type + '"' +
-          ' id="' + id + '"' +
-          ' placeholder="' + placeholder + '"' +
-          ' name="' + field.name + '"' +
-          ' value="' + value + '"' +
-          ' title="' + placeholder + '"' +
-        '/>'
-      }
-
-      function toSingleString(tagSting1, tagSting2) {
-        return tagSting1 + tagSting2
-      }
-
-      function nameChangedFromLastField(field) {
-        return this.lastFieldName != field.name
+        return conditionalLineBreak + input.toHtml()
       }
     },
     addWayToGetFormValuesInDoneFunction: function(swalArgs) {
-      var self = this
+      var swalFormInstance = this
       var doneFunction = swalArgs[1]
       swalArgs[1] = function() {
         // make form values available at `this` variable inside doneFunction
-        this.swalForm = self.getFormValues()
+        this.swalForm = swalFormInstance.getFormValues()
         doneFunction.apply(this, arguments)
       }
     },
@@ -119,8 +100,9 @@
     insertFormInSwalModal: function(htmlFormString) {
       var formTag = stringToTag(htmlFormString)
       var sweetAlertModal = document.querySelector('.sweet-alert')
-      var cancelButtonTag = sweetAlertModal.querySelector('.cancel')
-      sweetAlertModal.insertBefore(formTag, cancelButtonTag)
+      var buttonContainerTag = sweetAlertModal.querySelector('.sa-button-container') || sweetAlertModal.querySelector('.cancel')
+      // insert form before swal bottom buttons
+      sweetAlertModal.insertBefore(formTag, buttonContainerTag)
 
       function stringToTag(string) {
         var div = document.createElement('div')
@@ -139,19 +121,22 @@
       document.querySelector('.sweet-alert button.cancel').onblur = function() {}
     },
     getSelector: function() {
-      return (this.formFields[0].id ? '#' + this.formFields[0].id : '[name="' + this.formFields[0].name + '"]')
+      var firstField = this.formFields[0]
+      return (firstField.id ? t('#{id}', firstField) : t("[name='{name}']", firstField))
     },
     focusOnFirstInput: function() {
-      var self = this
-      setTimeout(function() {
-        document.querySelector(self.getSelector()).focus();
-      })
+      setTimeout(focus.bind(this))
+
+      function focus() {
+        document.querySelector(this.getSelector()).focus();
+      }
     },
     markFirstRadioButtons: function() {
-      var self = this
-      setTimeout(function() {
-        document.querySelector(self.getSelector()).checked = true
-      })
+      setTimeout(markAsChecked.bind(this))
+
+      function markAsChecked() {
+        document.querySelector(this.getSelector()).checked = true
+      }
     }
   })
 
@@ -159,24 +144,56 @@
     return tag.type == 'radio' || tag.type == 'checkbox'
   }
 
-  function extend(a, b){
-    for (var key in b) {
-      if (b.hasOwnProperty(key)) {
-        a[key] = b[key]
+  function extend(o1, o2){
+    for (var key in o2) {
+      if (o2.hasOwnProperty(key)) {
+        o1[key] = o2[key]
       }
     }
-    return a
+    return o1
   }
 
-  function camelCaseToHuman(arg) {
-    if (arg) {
-      return arg
-        // insert a space before all caps
-        .replace(/([A-Z])/g, ' $1')
-        // uppercase the first character
-        .replace(/^./, function(str){ return str.toUpperCase() })
-    } else {
-      return ''
+  function Input(field) {
+    var input = {
+      id: field.id || '',
+      name: field.name || '',
+      placeholder: field.placeholder || camelCaseToHuman(field.id),
+      value: field.value || '',
+      type: field.type || 'text',
+      isRadioOrCheckbox: function() {
+        return isRadioOrCheckbox(input)
+      },
+      toHtml: function() {
+        return t("<input id='{id}' class='{clazz}' type='{type}' name='{name}'" +
+                  " value='{value}' title='{placeholder}' placeholder='{placeholder}'>" + 
+                "<label for='{name}'>{label}</label>", input)
+      }
     }
+    input.label = input.isRadioOrCheckbox() ? input.value : ''
+    input.clazz = !input.isRadioOrCheckbox() ? 'nice-input' : 'patch-swal-styles-for-inputs'
+
+    return input
+
+    function camelCaseToHuman(arg) {
+      if (arg) {
+        return arg
+          .replace(/([A-Z])/g, ' $1') // insert a space before all caps
+          .replace(/^./, function(str){ return str.toUpperCase() }) // uppercase the first character
+      } else {
+        return ''
+      }
+    }
+  }
+
+  // string interpolation hack
+  function t(template, data) {
+    for (var key in data) {
+      template = template.replace(new RegExp('{' + key + '}', 'g'), data[key])
+    }
+    return template
+  }
+
+  function toSingleString(s1, s2) {
+    return s1 + s2
   }
 })()
