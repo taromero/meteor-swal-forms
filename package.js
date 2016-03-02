@@ -1,7 +1,7 @@
 Package.describe({
   name: 'canotto90:swal-forms',
   summary: 'Swal-Forms wrapped for meteor',
-  version: '0.1.1',
+  version: '0.2.0',
   git: 'https://github.com/taromero/meteor-swal-forms'
 });
 
